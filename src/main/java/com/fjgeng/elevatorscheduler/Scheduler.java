@@ -55,7 +55,7 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
                                 continue;
                             }
 
-                            scorePoint += Math.abs(floor - elevator.getElevatorState().getFloor()) * 5;
+                            scorePoint += (Building.TOP_FLOOR - Math.abs(floor - elevator.getElevatorState().getFloor()));
                             if (approaching(floor, direction, elevator.getElevatorState())) {
                                 scorePoint += 50;
                             }
