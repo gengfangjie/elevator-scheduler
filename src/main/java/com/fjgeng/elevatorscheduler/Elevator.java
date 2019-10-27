@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit;
  * 2. 相应的从最大速度减速到停止需要1.5s并且减速完成时走过的路程也为1层
  * 3. 以最大速度穿过1层的时间为1s
  * 4. 从启动到停止只走1层的话需要2s(因为无法达到最大速度)
- *
+ * <p>
  * 没有时间修正的问题：有时候发现用户没有乘上电梯，原因是这个电梯满员后离开了，入口按钮熄灭，但是用户没有重新按钮
  */
 public class Elevator {
@@ -163,6 +163,7 @@ public class Elevator {
     }
 
     class Engine implements Runnable {
+        @Override
         public void run() {
             while (true) {
                 try {
@@ -186,6 +187,131 @@ public class Elevator {
             }
         }
 
+        private void setNext() {
+            boolean flag = false;
+            int result = 0;
+            int currentFloor = elevatorState.getFloor();
+
+            Integer nearestDestinationHigher = Utils.getNearestHigher(destinationSet, currentFloor);
+            Integer nearestDestinationLower = Utils.getNearestLower(destinationSet, currentFloor);
+            Integer nearestUpRequestHigher = Utils.getNearestHigher(upRequestSet, currentFloor);
+            Integer nearestUpRequestLower = Utils.getNearestLower(upRequestSet, currentFloor);
+            Integer nearestDownRequestHigher = Utils.getNearestHigher(downRequestSet, currentFloor);
+            Integer nearestDownRequestLower = Utils.getNearestLower(downRequestSet, currentFloor);
+
+            if (Direction.Up.equals(elevatorState.getDirection())) {
+                // 取 最近 更高的 向上楼层
+                if (!flag) {
+                    flag = setHigherDestinationOrUpRequest(nearestDestinationHigher, nearestUpRequestHigher);
+                }
+                // 取 最远 更高的 向下楼层
+                if (!flag) {
+                    flag = setHigherDownRequest(currentFloor);
+                }
+                // 取 最近 更低的 向下楼层
+                if (!flag) {
+                    flag = setLowerDestinationOrDownRequest(nearestDestinationLower, nearestDownRequestLower);
+                }
+                // 取 最远 更低的 向上楼层
+                if (!flag) {
+                    flag = setLowerUpRequest(currentFloor);
+                }
+            } else if (Direction.Down.equals(elevatorState.getDirection())) {
+                // 取 最近 更低的 向下楼层
+                if (!flag) {
+                    flag = setLowerDestinationOrDownRequest(nearestDestinationLower, nearestDownRequestLower);
+                }
+                // 取 最远 更低的 向上楼层
+                if (!flag) {
+                    flag = setLowerUpRequest(currentFloor);
+                }
+
+                // 取 最近 更高的 向上楼层
+                if (!flag) {
+                    flag = setHigherDestinationOrUpRequest(nearestDestinationHigher, nearestUpRequestHigher);
+                }
+                    // 取 最远 更高的 向下楼层
+                if (!flag) {
+                    flag = setHigherDownRequest(currentFloor);
+                }
+            } else {
+                List<Integer> floorList = new ArrayList<>();
+                floorList.add(nearestDestinationHigher);
+                floorList.add(nearestDestinationLower);
+                floorList.add(nearestUpRequestHigher);
+                floorList.add(nearestUpRequestLower);
+                floorList.add(nearestDownRequestHigher);
+                floorList.add(nearestDownRequestLower);
+
+                result = Utils.getNearest(floorList, currentFloor);
+
+                if (!flag) {
+                    if (result == 0) {
+                        flag = true;
+                        doSetNext(result, null);
+                    }
+                }
+                if (!flag) {
+                    if (result == nearestUpRequestHigher || result == nearestUpRequestLower) {
+                        flag = true;
+                        doSetNext(result, Direction.Up);
+                    } else if (result == nearestDownRequestHigher || result == nearestDownRequestLower) {
+                        flag = true;
+                        doSetNext(result, Direction.Down);
+                    }
+                }
+            }
+            if (!flag) {
+                doSetNext(result, null);
+            }
+            directionCorrect();
+        }
+
+        private boolean setHigherDestinationOrUpRequest(int nearestDestinationHigher, int nearestUpRequestHigher) {
+            int result;
+            result = Utils.lower(nearestDestinationHigher, nearestUpRequestHigher);
+            if (result != 0) {
+                doSetNext(result, Direction.Up);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean setHigherDownRequest(int currentFloor) {
+            int result;
+            result = downRequestSet.isEmpty() ? 0 : downRequestSet.last();
+            if (result != 0 && result > currentFloor) {
+                doSetNext(result, Direction.Down);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean setLowerDestinationOrDownRequest(int nearestDestinationLower, int nearestDownRequestLower) {
+            int result;
+            result = Math.max(nearestDestinationLower, nearestDownRequestLower);
+            if (result != 0) {
+                doSetNext(result, Direction.Down);
+                return true;
+            }
+            return false;
+        }
+
+        private boolean setLowerUpRequest(int currentFloor) {
+            int result;
+            result = upRequestSet.isEmpty() ? 0 : upRequestSet.first();
+            if (result != 0 && result < currentFloor) {
+                doSetNext(result, Direction.Up);
+                return true;
+            }
+            return false;
+        }
+
+        private void doSetNext(int result, Direction direction) {
+            nextStep.setNextFloor(result);
+            nextStep.setNextDirection(direction);
+        }
+
         // 电梯进入stall状态才可以进行转向
         private void directionCorrect() {
             if (elevatorState.getStall()) {
@@ -199,118 +325,6 @@ public class Elevator {
             }
         }
 
-        private void doSetNext(int result, Direction direction) {
-            nextStep.setNextFloor(result);
-            nextStep.setNextDirection(direction);
-            if (elevatorState.getWorkingState().equals(ElevatorState.WorkingState.Up)) {
-                if (Direction.Up.equals(elevatorState.getDirection())) {
-                    if (nextFloorBelow(nextStep.getNextFloor())) {
-                        System.out.println("运行错误");
-                    }
-                }
-            }
-            directionCorrect();
-        }
-
-        private int setNext() {
-            int result = 0;
-            int currentFloor = elevatorState.getFloor();
-
-            Integer nearestDestinationHigher = Utils.getNearestHigher(destinationSet, currentFloor);
-            Integer nearestDestinationLower = Utils.getNearestLower(destinationSet, currentFloor);
-            Integer nearestUpRequestHigher = Utils.getNearestHigher(upRequestSet, currentFloor);
-            Integer nearestUpRequestLower = Utils.getNearestLower(upRequestSet, currentFloor);
-            Integer nearestDownRequestHigher = Utils.getNearestHigher(downRequestSet, currentFloor);
-            Integer nearestDownRequestLower = Utils.getNearestLower(downRequestSet, currentFloor);
-
-            if (Direction.Up.equals(elevatorState.getDirection())) {
-                // 取 最近 更高的 向上楼层
-                result = Utils.lower(nearestDestinationHigher, nearestUpRequestHigher);
-                if (result != 0) {
-                    doSetNext(result, Direction.Up);
-                    return result;
-                }
-                // 取 最远 更高的 向下楼层
-                result = downRequestSet.isEmpty() ? 0 : downRequestSet.last();
-                if (result != 0 && result > currentFloor) {
-                    doSetNext(result, Direction.Down);
-                    return result;
-                }
-                // 取 最近 更低的 向下楼层
-                result = Math.max(nearestDestinationLower, nearestDownRequestLower);
-                if (result != 0) {
-                    doSetNext(result, Direction.Down);
-                    return result;
-                }
-                // 取 最远 更低的 向上楼层
-                result = upRequestSet.isEmpty() ? 0 : upRequestSet.first();
-                if (result != 0 && result < currentFloor) {
-                    doSetNext(result, Direction.Up);
-                    return result;
-                }
-            }
-            if (Direction.Down.equals(elevatorState.getDirection())) {
-                // 取 最近 更低的 向下楼层
-                result = Math.max(nearestDestinationLower, nearestDownRequestLower);
-                if (result != 0) {
-                    doSetNext(result, Direction.Down);
-                    return result;
-                }
-                // 取 最远 更低的 向上楼层
-                result = upRequestSet.isEmpty() ? 0 : upRequestSet.first();
-                if (result != 0 && result < currentFloor) {
-                    doSetNext(result, Direction.Up);
-                    return result;
-                }
-                // 取 最近 更高的 向上楼层
-                result = Utils.lower(nearestDestinationHigher, nearestUpRequestHigher);
-                if (result != 0) {
-                    doSetNext(result, Direction.Up);
-                    return result;
-                }
-                // 取 最远 更高的 向下楼层
-                result = downRequestSet.isEmpty() ? 0 : downRequestSet.last();
-                if (result != 0 && result > currentFloor) {
-                    doSetNext(result, Direction.Down);
-                    return result;
-                }
-            }
-            if (upRequestSet.contains(currentFloor)) {
-                if (elevatorState.getStall()) {
-                    elevatorState.setDirection(Direction.Up);
-                    nextStep.setNextFloor(currentFloor);
-                    nextStep.setNextDirection(Direction.Up);
-                    return result;
-                }
-            }
-            if (downRequestSet.contains(currentFloor)) {
-                if (elevatorState.getStall()) {
-                    elevatorState.setDirection(Direction.Down);
-                    nextStep.setNextFloor(currentFloor);
-                    nextStep.setNextDirection(Direction.Down);
-                    return result;
-                }
-            }
-
-            List<Integer> floorList = new ArrayList<>();
-            floorList.add(nearestDestinationHigher);
-            floorList.add(nearestDestinationLower);
-            floorList.add(nearestUpRequestHigher);
-            floorList.add(nearestUpRequestLower);
-            floorList.add(nearestDownRequestHigher);
-            floorList.add(nearestDownRequestLower);
-
-            result = Utils.getNearest(floorList, currentFloor);
-            nextStep.setNextFloor(result);
-            if (result == nearestUpRequestHigher || result == nearestUpRequestLower) {
-                nextStep.setNextDirection(Direction.Up);
-            } else if (result == nearestDownRequestHigher || result == nearestDownRequestLower) {
-                nextStep.setNextDirection(Direction.Down);
-            }
-            directionCorrect();
-            return Utils.getNearest(floorList, currentFloor);
-        }
-
         /**
          * nextFloor与当前车厢距离(gap)大于等于2时，车厢加速或匀速穿过1层
          * nextFloor与当前车厢距离(gap)等于1时，车厢减速到达
@@ -318,39 +332,31 @@ public class Elevator {
          * @throws InterruptedException
          */
         private void doWork() throws InterruptedException {
+            if (nextStepError()) {
+                System.out.println("运行错误");
+            }
+
             elevatorState.setStall(false);
             int nextFloor = nextStep.getNextFloor();
             int gap = Math.abs(elevatorState.getFloor() - nextFloor);
 
             if (elevatorState.getWorkingState().equals(ElevatorState.WorkingState.Idle)
                     || elevatorState.getWorkingState().equals(ElevatorState.WorkingState.Waiting_in)) {
-                if (nextFloorAbove(nextFloor)) {
+                if (nextFloorHigher(nextFloor)) {
                     startUp(gap);
-                } else if (nextFloorBelow(nextFloor)) {
+                } else if (nextFloorLower(nextFloor)) {
                     startDown(gap);
                 }
             } else if (elevatorState.getWorkingState().equals(ElevatorState.WorkingState.Up)) {
                 if (Direction.Up.equals(elevatorState.getDirection())) {
-                    if (nextFloorAbove(nextFloor)) {
+                    if (nextFloorHigher(nextFloor)) {
                         goUp(gap);
-                    } else if (nextFloorBelow(nextFloor)) {
-                        System.out.println("运行错误");
-//                        System.out.println(String.format("电梯: %s 在 %s 层减速准备反向运行", mark, elevatorState.getFloor()));
-//                        goUp(1);
-//                        elevatorState.setWorkingState(ElevatorState.WorkingState.Stall);
-                        return;
                     }
                 }
             } else if (elevatorState.getWorkingState().equals(ElevatorState.WorkingState.Down)) {
                 if (Direction.Down.equals(elevatorState.getDirection())) {
-                    if (nextFloorBelow(nextFloor)) {
+                    if (nextFloorLower(nextFloor)) {
                         goDown(gap);
-                    } else if (nextFloorAbove(nextFloor)) {
-                        System.out.println("运行错误");
-//                        System.out.println(String.format("电梯: %s 在 %s 层减速准备反向运行", mark, elevatorState.getFloor()));
-//                        goDown(1);
-//                        elevatorState.setWorkingState(ElevatorState.WorkingState.Stall);
-                        return;
                     }
                 }
             }
@@ -360,11 +366,24 @@ public class Elevator {
             }
         }
 
-        private boolean nextFloorAbove(int nextFloor) {
+        private boolean nextStepError() {
+            if (Direction.Up.equals(elevatorState.getDirection())) {
+                if (nextFloorLower(nextStep.getNextFloor())) {
+                    return true;
+                }
+            } else if (Direction.Down.equals(elevatorState.getDirection())) {
+                if (nextFloorHigher(nextStep.getNextFloor())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean nextFloorHigher(int nextFloor) {
             return nextFloor > elevatorState.getFloor();
         }
 
-        private boolean nextFloorBelow(int nextFloor) {
+        private boolean nextFloorLower(int nextFloor) {
             return nextFloor < elevatorState.getFloor();
         }
 
@@ -406,9 +425,9 @@ public class Elevator {
             TimeUnit.MILLISECONDS.sleep(WAITING_IN_TIME);
             destinationSet.remove(elevatorState.getFloor());
 
-            if (elevatorState.getDirection().equals(Direction.Up)) {
+            if (Direction.Up.equals(elevatorState.getDirection())) {
                 upRequestSet.remove(elevatorState.getFloor());
-            } else if (elevatorState.getDirection().equals(Direction.Down)) {
+            } else if (Direction.Down.equals(elevatorState.getDirection())) {
                 downRequestSet.remove(elevatorState.getFloor());
             }
         }

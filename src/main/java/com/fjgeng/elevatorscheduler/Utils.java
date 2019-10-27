@@ -34,7 +34,9 @@ public class Utils {
     }
 
     public static int lower(int floor1, int floor2) {
-        if (floor1 < floor2 && floor1 != 0) {
+        if (floor1 == 0) return floor2;
+        if (floor2 == 0) return floor1;
+        if (floor1 < floor2) {
             return floor1;
         } else {
             return floor2;

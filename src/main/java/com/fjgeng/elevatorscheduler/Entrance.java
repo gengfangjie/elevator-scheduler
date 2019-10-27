@@ -1,7 +1,6 @@
 package com.fjgeng.elevatorscheduler;
 
 import com.fjgeng.elevatorscheduler.enums.Direction;
-import com.fjgeng.elevatorscheduler.enums.ElevatorMark;
 import com.fjgeng.elevatorscheduler.listener.ElevatorStateListener;
 import com.fjgeng.elevatorscheduler.listener.EntranceButtonListener;
 
@@ -50,9 +49,9 @@ public class Entrance implements ElevatorStateListener {
     public void stateChanged(Elevator elevator) {
         if (elevator.getElevatorState().getFloor() == this.floor
                 && elevator.getElevatorState().getWorkingState().equals(ElevatorState.WorkingState.Waiting_in)) {
-            if (elevator.getElevatorState().getDirection().equals(Direction.Up)) {
+            if (Direction.Up.equals(elevator.getElevatorState().getDirection())) {
                 this.upButton = false;
-            } else if (elevator.getElevatorState().getDirection().equals(Direction.Down)) {
+            } else if (Direction.Down.equals(elevator.getElevatorState().getDirection())) {
                 this.downButton = false;
             }
         }

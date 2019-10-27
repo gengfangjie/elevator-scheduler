@@ -30,7 +30,7 @@ public enum ElevatorMark {
 
     public static ElevatorMark getByIndex(Integer index) {
         for (ElevatorMark mark : values()) {
-            if (index == mark.getIndex()) {
+            if (index.equals(mark.getIndex())) {
                 return mark;
             }
         }
