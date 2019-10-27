@@ -29,15 +29,15 @@ public class Elevator {
     public static final int CAPACITY = 11;
 
     // 假设加速或减速通过一层的运行时间为1.5s
-    private static final long ACC_OR_DSC_ONE_FLOOR = 1500;
+    private static final long ACC_OR_DSC_ONE_FLOOR = 150;
     // 假设加速并减速通过一层的运行时间为2s
-    private static final long ACC_AND_DSC_ONE_FLOOR = 2000;
+    private static final long ACC_AND_DSC_ONE_FLOOR = 200;
     // 假设匀速穿过一层的运行时间为1s
-    private static final long PASS_FLOOR_TIME = 1000;
+    private static final long PASS_FLOOR_TIME = 100;
     // 假设电梯每次等待下客时间为4s
-    private static final long WAITING_OUT_TIME = 4000;
+    private static final long WAITING_OUT_TIME = 400;
     // 假设电梯每次等待上客时间为4s
-    private static final long WAITING_IN_TIME = 4000;
+    private static final long WAITING_IN_TIME = 400;
 
     private final Object lock;
 
@@ -168,8 +168,8 @@ public class Elevator {
             while (true) {
                 try {
                     while (nextStep.getNextFloor() > 0) {
-                        synchronized (lock) {
                             doWork();
+                        synchronized (lock) {
                             setNext();
                         }
                     }
@@ -423,12 +423,14 @@ public class Elevator {
             elevatorState.setWorkingState(ElevatorState.WorkingState.Waiting_in);
             stateChanged();
             TimeUnit.MILLISECONDS.sleep(WAITING_IN_TIME);
-            destinationSet.remove(elevatorState.getFloor());
 
-            if (Direction.Up.equals(elevatorState.getDirection())) {
-                upRequestSet.remove(elevatorState.getFloor());
-            } else if (Direction.Down.equals(elevatorState.getDirection())) {
-                downRequestSet.remove(elevatorState.getFloor());
+            synchronized (lock) {
+                destinationSet.remove(elevatorState.getFloor());
+                if (Direction.Up.equals(elevatorState.getDirection())) {
+                    upRequestSet.remove(elevatorState.getFloor());
+                } else if (Direction.Down.equals(elevatorState.getDirection())) {
+                    downRequestSet.remove(elevatorState.getFloor());
+                }
             }
         }
     }

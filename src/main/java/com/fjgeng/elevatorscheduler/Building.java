@@ -32,10 +32,14 @@ public class Building {
     }
 
     private void init() {
+        List<EntranceButton> entranceButtonList = new ArrayList<>(TOP_FLOOR);
+        for (int i = GROUND_FLOOR; i <= TOP_FLOOR; i++) {
+            entranceButtonList.add(new EntranceButton(false, false));
+        }
         for (ElevatorMark mark : ElevatorMark.values()) {
             List<Entrance> entranceList = new ArrayList<>();
             for (int i = GROUND_FLOOR; i <= TOP_FLOOR; i++) {
-                entranceList.add(new Entrance(mark.getMark(), i));
+                entranceList.add(new Entrance(mark.getMark(), i, entranceButtonList.get(i-1)));
             }
             elevatorList.add(new Elevator(mark.getMark(), entranceList));
         }

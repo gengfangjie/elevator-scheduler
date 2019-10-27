@@ -13,16 +13,13 @@ public class Entrance implements ElevatorStateListener {
     private final Integer floor;
 
     private EntranceButtonListener entranceButtonListener;
-    // 上行按钮灯
-    private Boolean upButton;
-    // 下行按钮灯
-    private Boolean downButton;
 
-    public Entrance(String mark, Integer floor) {
+    private EntranceButton entranceButton;
+
+    public Entrance(String mark, Integer floor, EntranceButton entranceButton) {
         this.mark = mark;
         this.floor = floor;
-        this.upButton = false;
-        this.downButton = false;
+        this.entranceButton = entranceButton;
     }
 
     public void buttonHit(Direction direction) {
@@ -30,15 +27,25 @@ public class Entrance implements ElevatorStateListener {
             System.out.println("顶层无向上按钮");
         } else if (this.floor == Building.GROUND_FLOOR && direction.equals(Direction.Down)) {
             System.out.println("一层无向下按钮");
-        } else if (direction.equals(Direction.Down) && !this.downButton) {
-            this.downButton = true;
+        } else if (direction.equals(Direction.Down) && !this.entranceButton.getDownButton()) {
+            this.setDownButton(true);
             this.entranceButtonListener.entranceButtonHit(this.floor, direction);
-        } else if (direction.equals(Direction.Up) && !upButton) {
-            this.upButton = true;
+        } else if (direction.equals(Direction.Up) && !this.entranceButton.getUpButton()) {
+            this.setUpButton(true);
             this.entranceButtonListener.entranceButtonHit(this.floor, direction);
         } else {
-            System.out.println("重复按钮动作");
+            System.out.println(String.format("电梯入口: %s 重复按钮动作", floor+mark));
         }
+    }
+
+    public void setUpButton(Boolean upButton) {
+        System.out.println(String.format("电梯入口: %s 按钮Up: %s", floor+mark, upButton));
+        this.entranceButton.setUpButton(upButton);
+    }
+
+    public void setDownButton(Boolean downButton) {
+        System.out.println(String.format("电梯入口: %s 按钮Down: %s", floor+mark, downButton));
+        this.entranceButton.setDownButton(downButton);
     }
 
     public void registerListener(EntranceButtonListener listener) {
@@ -50,9 +57,9 @@ public class Entrance implements ElevatorStateListener {
         if (elevator.getElevatorState().getFloor() == this.floor
                 && elevator.getElevatorState().getWorkingState().equals(ElevatorState.WorkingState.Waiting_in)) {
             if (Direction.Up.equals(elevator.getElevatorState().getDirection())) {
-                this.upButton = false;
+                this.setUpButton(false);
             } else if (Direction.Down.equals(elevator.getElevatorState().getDirection())) {
-                this.downButton = false;
+                this.setDownButton(false);
             }
         }
     }

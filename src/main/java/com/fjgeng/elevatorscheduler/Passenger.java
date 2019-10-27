@@ -74,7 +74,7 @@ public class Passenger implements ElevatorStateListener {
     /**
      * 乘客操作: 进入电梯厢，忽略进电梯耗时
      * 失去入口对象，获取当前电梯对象，注销对其余三部电梯的监听
-      */
+     */
     private boolean enter(Elevator elevator) {
         if (elevator.passengerIn(this)) {
             this.entrance = null;
@@ -85,7 +85,7 @@ public class Passenger implements ElevatorStateListener {
                 }
             }
             this.elevator.addDestination(destination);
-            System.out.println(String.format("乘客: %s 已乘电梯: %s 方向: %s",
+            System.out.println(String.format("用户: %s 已乘电梯: %s 方向: %s",
                     id, elevator.getMark(), elevator.getElevatorState().getDirection()));
             return true;
         }
@@ -94,7 +94,7 @@ public class Passenger implements ElevatorStateListener {
 
     private boolean exit() {
         if (elevator.passengerOut(this)) {
-            System.out.println(String.format("乘客: %s 出电梯: %s 到达楼层: %s",
+            System.out.println(String.format("用户: %s 出电梯: %s 到达楼层: %s",
                     id, elevator.getMark(), elevator.getElevatorState().getFloor()));
             this.elevator.removeListener(this);
             this.elevator = null;
