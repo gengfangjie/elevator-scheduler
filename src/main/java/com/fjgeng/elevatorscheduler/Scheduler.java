@@ -13,6 +13,7 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by gengfangjie on 2019/10/25.
@@ -46,15 +47,13 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
 
                         for (ElevatorMark elevatorMark : ElevatorMark.values()) {
                             Elevator elevator = Building.INSTANCE.getElevator(elevatorMark);
-                            Score score = new Score(elevatorMark, 0);
+                            Score score = new Score(elevatorMark);
 
                             int scorePoint = 0;
-
                             if (elevator.isFullLoad() || elevator.isOverload()) {
                                 score.setScore(Integer.MIN_VALUE);
                                 continue;
                             }
-
                             scorePoint += (Building.TOP_FLOOR - Math.abs(floor - elevator.getElevatorState().getFloor()));
                             if (approaching(floor, direction, elevator.getElevatorState())) {
                                 scorePoint += 50;
@@ -62,7 +61,6 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
                             if (ElevatorState.WorkingState.Idle.equals(elevator.getElevatorState().getWorkingState())) {
                                 scorePoint += 50;
                             }
-
                             score.setScore(scorePoint);
                             scores.add(score);
                         }
@@ -71,10 +69,19 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
 
                         if (scores.get(scores.size() - 1).getScore() < 0) {
                             System.out.println("当前电梯已满员，稍后重试调度...");
+                            rideRequestQueue.offer(request);
+                            TimeUnit.SECONDS.sleep(1);
                             continue;
                         }
-
                         Building.INSTANCE.getElevator(scores.get(scores.size() - 1).getMark()).receiveRideRequest(request);
+
+                        scores.forEach(score -> score.setLoad(Building.INSTANCE.getElevator(score.getMark()).calculateLoad()));
+                        scores.sort(Comparator.comparingInt(Score::getLoad));
+                        Elevator busyElevator = Building.INSTANCE.getElevator(scores.get(scores.size() - 1).getMark());
+                        Elevator leisureElevator = Building.INSTANCE.getElevator(scores.get(0).getMark());
+                        if (busyElevator.calculateLoad() - leisureElevator.calculateLoad() > Elevator.LOAD_THRESHOLD) {
+                            busyElevator.loadTransfer(leisureElevator);
+                        }
                     }
                 } catch (InterruptedException e) {
                     e.printStackTrace();
@@ -115,16 +122,24 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
     }
 
     class Score {
-        private ElevatorMark mark;
+        private final ElevatorMark mark;
         private Integer score;
+        private Integer load;
 
-        public Score(ElevatorMark mark, Integer score) {
+        public Score(ElevatorMark mark) {
             this.mark = mark;
-            this.score = score;
         }
 
         public ElevatorMark getMark() {
             return mark;
+        }
+
+        public Integer getLoad() {
+            return load;
+        }
+
+        public void setLoad(Integer load) {
+            this.load = load;
         }
 
         public Integer getScore() {

@@ -4,6 +4,7 @@ import com.fjgeng.elevatorscheduler.enums.Direction;
 import com.fjgeng.elevatorscheduler.listener.ElevatorStateListener;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
@@ -21,12 +22,12 @@ import java.util.concurrent.TimeUnit;
  * 2. 相应的从最大速度减速到停止需要1.5s并且减速完成时走过的路程也为1层
  * 3. 以最大速度穿过1层的时间为1s
  * 4. 从启动到停止只走1层的话需要2s(因为无法达到最大速度)
- * <p>
- * 没有时间修正的问题：有时候发现用户没有乘上电梯，原因是这个电梯满员后离开了，入口按钮熄灭，但是用户没有重新按钮
  */
 public class Elevator {
     // 假设电梯容量为11人
     public static final int CAPACITY = 11;
+    // load balance阈值
+    public static final int LOAD_THRESHOLD = 5;
 
     // 假设加速或减速通过一层的运行时间为1.5s
     private static final long ACC_OR_DSC_ONE_FLOOR = 150;
@@ -139,6 +140,82 @@ public class Elevator {
         }
     }
 
+    public int calculateLoad() {
+        return upRequestSet.size() + downRequestSet.size() + destinationSet.size();
+    }
+
+    public void loadTransfer(Elevator elevator) {
+        int i = 0;
+        int transferCount = LOAD_THRESHOLD/2;
+        synchronized (lock) {
+            if (Direction.Up.equals(this.elevatorState.getDirection())) {
+                Iterator<Integer> upRequestIterator = upRequestSet.iterator();
+                while (upRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = upRequestIterator.next();
+                    if (next < this.elevatorState.getFloor() && !destinationSet.contains(next)) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Up);
+                        elevator.receiveRideRequest(rideRequest);
+                        upRequestIterator.remove();
+                        i++;
+                    }
+                }
+                Iterator<Integer> downRequestIterator = downRequestSet.iterator();
+                while (downRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = downRequestIterator.next();
+                    if (next < this.elevatorState.getFloor() && !destinationSet.contains(next)) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Down);
+                        elevator.receiveRideRequest(rideRequest);
+                        downRequestIterator.remove();
+                        i++;
+                    }
+                }
+            } else if (Direction.Down.equals(this.elevatorState.getDirection())) {
+                Iterator<Integer> downRequestIterator = downRequestSet.descendingIterator();
+                while (downRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = downRequestIterator.next();
+                    if (next > this.elevatorState.getFloor() && !destinationSet.contains(next)) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Down);
+                        elevator.receiveRideRequest(rideRequest);
+                        downRequestIterator.remove();
+                        i++;
+                    }
+                }
+                Iterator<Integer> upRequestIterator = upRequestSet.descendingIterator();
+                while (upRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = upRequestIterator.next();
+                    if (next > this.elevatorState.getFloor() && !destinationSet.contains(next)) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Up);
+                        elevator.receiveRideRequest(rideRequest);
+                        upRequestIterator.remove();
+                        i++;
+                    }
+                }
+            } else {
+                Iterator<Integer> upRequestIterator = upRequestSet.iterator();
+                while (upRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = upRequestIterator.next();
+                    if (!destinationSet.contains(next) && Math.abs(this.elevatorState.getFloor()-next) > 2) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Up);
+                        elevator.receiveRideRequest(rideRequest);
+                        upRequestIterator.remove();
+                        i++;
+                    }
+                }
+                Iterator<Integer> downRequestIterator = downRequestSet.iterator();
+                while (downRequestIterator.hasNext() && i < transferCount) {
+                    Integer next = downRequestIterator.next();
+                    if (!destinationSet.contains(next) && Math.abs(this.elevatorState.getFloor()-next) > 2) {
+                        RideRequest rideRequest = new RideRequest(next, Direction.Down);
+                        elevator.receiveRideRequest(rideRequest);
+                        downRequestIterator.remove();
+                        i++;
+                    }
+                }
+            }
+        }
+        System.out.println(String.format("乘梯请求转移: [%s] ->%s-> [%s]", mark, i, elevator.getMark()));
+    }
+
     public boolean isOverload() {
         return this.passengerQueue.size() > CAPACITY;
     }
@@ -168,7 +245,7 @@ public class Elevator {
             while (true) {
                 try {
                     while (nextStep.getNextFloor() > 0) {
-                            doWork();
+                        doWork();
                         synchronized (lock) {
                             setNext();
                         }
@@ -198,7 +275,6 @@ public class Elevator {
             Integer nearestUpRequestLower = Utils.getNearestLower(upRequestSet, currentFloor);
             Integer nearestDownRequestHigher = Utils.getNearestHigher(downRequestSet, currentFloor);
             Integer nearestDownRequestLower = Utils.getNearestLower(downRequestSet, currentFloor);
-
             if (Direction.Up.equals(elevatorState.getDirection())) {
                 // 取 最近 更高的 向上楼层
                 if (!flag) {
@@ -225,12 +301,11 @@ public class Elevator {
                 if (!flag) {
                     flag = setLowerUpRequest(currentFloor);
                 }
-
                 // 取 最近 更高的 向上楼层
                 if (!flag) {
                     flag = setHigherDestinationOrUpRequest(nearestDestinationHigher, nearestUpRequestHigher);
                 }
-                    // 取 最远 更高的 向下楼层
+                // 取 最远 更高的 向下楼层
                 if (!flag) {
                     flag = setHigherDownRequest(currentFloor);
                 }
@@ -242,7 +317,6 @@ public class Elevator {
                 floorList.add(nearestUpRequestLower);
                 floorList.add(nearestDownRequestHigher);
                 floorList.add(nearestDownRequestLower);
-
                 result = Utils.getNearest(floorList, currentFloor);
 
                 if (!flag) {
@@ -261,10 +335,11 @@ public class Elevator {
                     }
                 }
             }
-            if (!flag) {
+            if (flag) {
+                directionCorrect();
+            } else {
                 doSetNext(result, null);
             }
-            directionCorrect();
         }
 
         private boolean setHigherDestinationOrUpRequest(int nearestDestinationHigher, int nearestUpRequestHigher) {
@@ -417,13 +492,6 @@ public class Elevator {
             System.out.println(String.format("电梯: %s 到达 %s 层停靠", mark, elevatorState.getFloor()));
             elevatorState.setStall(true);
             elevatorState.setDirection(nextStep.getNextDirection());
-            elevatorState.setWorkingState(ElevatorState.WorkingState.Waiting_out);
-            stateChanged();
-            TimeUnit.MILLISECONDS.sleep(WAITING_OUT_TIME);
-            elevatorState.setWorkingState(ElevatorState.WorkingState.Waiting_in);
-            stateChanged();
-            TimeUnit.MILLISECONDS.sleep(WAITING_IN_TIME);
-
             synchronized (lock) {
                 destinationSet.remove(elevatorState.getFloor());
                 if (Direction.Up.equals(elevatorState.getDirection())) {
@@ -432,6 +500,12 @@ public class Elevator {
                     downRequestSet.remove(elevatorState.getFloor());
                 }
             }
+            elevatorState.setWorkingState(ElevatorState.WorkingState.Waiting_out);
+            stateChanged();
+            TimeUnit.MILLISECONDS.sleep(WAITING_OUT_TIME);
+            elevatorState.setWorkingState(ElevatorState.WorkingState.Waiting_in);
+            stateChanged();
+            TimeUnit.MILLISECONDS.sleep(WAITING_IN_TIME);
         }
     }
 

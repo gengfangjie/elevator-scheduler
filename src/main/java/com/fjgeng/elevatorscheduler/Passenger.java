@@ -114,10 +114,13 @@ public class Passenger implements ElevatorStateListener {
         if (this.elevator == null
                 && changedElevator.getElevatorState().getFloor() == entrance.getFloor()
                 && direction == changedElevator.getElevatorState().getDirection()
-                && changedElevator.getElevatorState().getWorkingState() == ElevatorState.WorkingState.Waiting_in
-                && !changedElevator.isFullLoad()
-                && !changedElevator.isOverload()) {
-            enter(changedElevator);
+                && changedElevator.getElevatorState().getWorkingState() == ElevatorState.WorkingState.Waiting_in) {
+            if (!changedElevator.isFullLoad() && !changedElevator.isOverload()) {
+                enter(changedElevator);
+            } else {
+                System.out.println(String.format("电梯[%s]满员 重新请求", changedElevator.getElevatorState().getFloor() + changedElevator.getMark()));
+                hitEntranceButton(entrance, direction);
+            }
         }
 
         // 下梯
