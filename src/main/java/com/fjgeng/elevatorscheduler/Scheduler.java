@@ -67,7 +67,7 @@ public class Scheduler implements EntranceButtonListener, ElevatorStateListener 
 
                         scores.sort(Comparator.comparingInt(Score::getScore));
 
-                        if (scores.get(scores.size() - 1).getScore() < 0) {
+                        if (scores.isEmpty() || scores.get(scores.size() - 1).getScore() < 0) {
                             System.out.println("当前电梯已满员，稍后重试调度...");
                             rideRequestQueue.offer(request);
                             TimeUnit.SECONDS.sleep(1);
